@@ -1,0 +1,153 @@
+                                                                        //2degree polynomial
+#include <stdio.h>
+#include <stdlib.h>
+
+// Function to calculate sums required for the normal equations
+void build_sums(int* x_values, int* y_values, int n, int* sums) {
+    sums[0] = 0;  // n
+    sums[1] = 0;  // Σx
+    sums[2] = 0;  // Σx^2
+    sums[3] = 0;  // Σx^3
+    sums[4] = 0;  // Σx^4
+    sums[5] = 0;  // Σy
+    sums[6] = 0;  // Σxy
+    sums[7] = 0;  // Σx^2y
+
+    for (int i = 0; i < n; i++) {
+        int x = x_values[i];
+        int y = y_values[i];
+
+        sums[0] += 1;          // n
+        sums[1] += x;          // Σx
+        sums[2] += x * x;      // Σx^2
+        sums[3] += x * x * x;  // Σx^3
+        sums[4] += x * x * x * x;  // Σx^4
+        sums[5] += y;          // Σy
+        sums[6] += x * y;      // Σxy
+        sums[7] += x * x * y;  // Σx^2y
+    }
+}
+
+// Function to solve the system of linear equations (Ax = b) using Gaussian elimination
+void solve_3x3(int A[3][3], int b[3], int* x) {
+    // Perform Gaussian elimination
+    for (int k = 0; k < 3; k++) {
+        // Find pivot
+        int pivot = A[k][k];
+
+        if (pivot == 0) {
+            for (int i = k + 1; i < 3; i++) {
+                if (A[i][k] != 0) {
+                    for (int j = 0; j < 3; j++) {
+                        int temp = A[k][j];
+                        A[k][j] = A[i][j];
+                        A[i][j] = temp;
+                    }
+                    int temp = b[k];
+                    b[k] = b[i];
+                    b[i] = temp;
+                    break;
+                }
+            }
+        }
+
+        if (A[k][k] == 0) {
+            printf("Singular matrix in solve_3x3\n");
+            exit(1);
+        }
+
+        for (int j = 0; j < 3; j++) {
+            A[k][j] /= pivot;
+        }
+        b[k] /= pivot;
+
+        for (int i = k + 1; i < 3; i++) {
+            int factor = A[i][k];
+            for (int j = 0; j < 3; j++) {
+                A[i][j] -= A[k][j] * factor;
+            }
+            b[i] -= b[k] * factor;
+        }
+    }
+
+    // Back substitution
+    for (int i = 2; i >= 0; i--) {
+        x[i] = b[i];
+        for (int j = i + 1; j < 3; j++) {
+            x[i] -= A[i][j] * x[j];
+        }
+    }
+}
+
+// Function to perform the quadratic fit
+void fit_quadratic(int* x_values, int* y_values, int n, int* a0, int* a1, int* a2) {
+    int sums[8];  // Array to store all the required sums
+    build_sums(x_values, y_values, n, sums);
+
+    // Create the matrix A for the normal equations
+    int A[3][3] = {
+        {sums[0], sums[1], sums[2]},   // [ n   Σx   Σx^2 ]
+        {sums[1], sums[2], sums[3]},   // [ Σx   Σx^2 Σx^3 ]
+        {sums[2], sums[3], sums[4]}    // [ Σx^2 Σx^3 Σx^4 ]
+    };
+
+    // Create the vector b for the normal equations
+    int b[3] = {sums[5], sums[6], sums[7]};  // [ Σy, Σxy, Σx^2y ]
+
+    // Solve the system of equations to find a0, a1, a2
+    int x[3];
+    solve_3x3(A, b, x);
+
+    *a0 = x[0];
+    *a1 = x[1];
+    *a2 = x[2];
+}
+
+// Function to predict y for a given x using the fitted quadratic
+int predict(int a0, int a1, int a2, int x) {
+    return a0 + a1 * x + a2 * x * x;
+}
+
+// Function to print the table of data and sums
+void print_table_and_sums(int* x_values, int* y_values, int n) {
+    printf("%8s%10s%12s%12s%12s%12s%12s\n", "x", "y", "x^2", "x^3", "x^4", "x*y", "x^2*y");
+    printf("----------------------------------------------------------------------------\n");
+
+    for (int i = 0; i < n; i++) {
+        int x = x_values[i];
+        int y = y_values[i];
+        printf("%8d%10d%12d%12d%12d%12d%12d\n", x, y, x * x, x * x * x, x * x * x * x, x * y, x * x * y);
+    }
+
+    int sums[8];
+    build_sums(x_values, y_values, n, sums);
+    printf("----------------------------------------------------------------------------\n");
+    printf("n = %d, sx = %d, sx^2 = %d, sx^3 = %d, sx^4 = %d\n", sums[0], sums[1], sums[2], sums[3], sums[4]);
+    printf("sy = %d, sxy = %d, sx^2*y = %d\n", sums[5], sums[6], sums[7]);
+    printf("\n");
+}
+
+int main() {
+    int x_values[] = {0, 1, 2};
+    int y_values[] = {1, 6, 17};
+    int n = 3;
+
+    // Print input data and sums
+    printf("### Input Data and Sums ###\n");
+    print_table_and_sums(x_values, y_values, n);
+
+    // Fit quadratic
+    int a0, a1, a2;
+    fit_quadratic(x_values, y_values, n, &a0, &a1, &a2);
+
+    // Print fitted quadratic
+    printf("### Fitting Results ###\n");
+    printf("Fitted quadratic: y = %d + %dx + %dx^2\n", a0, a1, a2);
+
+    // Make predictions
+    printf("\n### Predictions ###\n");
+    printf("y(1.6) = %d\n", predict(a0, a1, a2, 1));
+    printf("y(3)   = %d\n", predict(a0, a1, a2, 3));
+
+    return 0;
+}
